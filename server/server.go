@@ -44,6 +44,47 @@ func packageResponse (content string, status string) string {
 		content + "\r\n")
 }
 
+func handleConnection (connection net.Conn) {
+	data := make([]byte, 1024)
+
+	contents, err := connection.Read(data)
+
+	handleError(err)
+
+	request := string(data[:contents])
+
+	// get file path
+	resource := strings.Split(request, " ")[1]
+
+	fmt.Println("Connection established with", connection.RemoteAddr())
+
+	allowedResources := map[string]string{
+		"/": "/index.html",
+	}
+
+	var response string
+	var status string
+
+	if _, ok := allowedResources[resource]; ok {
+		fileContents, err := os.ReadFile("pages" + allowedResources[resource])
+		handleError(err)
+
+		if resource == "/" {
+			response = string(fileContents)
+			status = Success
+		}
+	} else {
+		response = "404!"
+		status = NotFound
+	}
+
+	sendBack := packageResponse(response, status)
+
+	connection.Write([]byte(sendBack))
+
+	connection.Close()
+}
+
 func main () {
 	resolvedIp, err := net.ResolveTCPAddr("tcp", "localhost:8080")
 	handleError(err)
@@ -53,45 +94,10 @@ func main () {
 
 	for {
 		connection, err := listen.Accept()
-
+	
 		handleError(err)
 
-		data := make([]byte, 1024)
-
-		contents, err := connection.Read(data)
-
-		request := string(data[:contents])
-
-		// get file path
-		resource := strings.Split(request, " ")[1]
-
-		fmt.Println("Connection established with", connection.RemoteAddr())
-
-		allowedResources := map[string]string{
-			"/": "/index.html",
-		}
-
-		var response string
-		var status string
-
-		if _, ok := allowedResources[resource]; ok {
-			fileContents, err := os.ReadFile("pages" + allowedResources[resource])
-			handleError(err)
-
-			if resource == "/" {
-				response = string(fileContents)
-				status = Success
-			}
-		} else {
-			response = "404!"
-			status = NotFound
-		}
-
-		sendBack := packageResponse(response, status)
-
-		connection.Write([]byte(sendBack))
-
-		connection.Close()
+		go handleConnection(connection)
 	}
 }
 
